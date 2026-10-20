@@ -69,6 +69,13 @@ public class SmartDBA extends AbstractApplication {
             "  NULL, OFFSET, ON, ORDER, PRIMARY, RIGHT, ROWNUM, SELECT, SYSDATE, SYSTIME,\n" +
             "  SYSTIMESTAMP, TODAY, TOP, TRUE, UNION, WHERE, WITH.\n" +
             "  Example: SELECT COUNT(*) FROM \"user\" -- not FROM user\n" +
+            "- When using PostgreSQL, unquoted identifiers are folded to lower case, so prefer lower-case\n" +
+            "  snake_case names and only double-quote a name that is mixed-case or reserved. USER, ORDER,\n" +
+            "  GROUP, TABLE, COLUMN, CHECK, DEFAULT, ANALYSE and similar words are reserved and MUST be\n" +
+            "  double-quoted (a bare user selects the current role, not your table).\n" +
+            "  Use SERIAL / BIGSERIAL or GENERATED ... AS IDENTITY for auto-increment keys (not AUTO_INCREMENT),\n" +
+            "  BOOLEAN with TRUE/FALSE, TEXT for long strings, TIMESTAMP/TIMESTAMPTZ for dates, and ILIKE for\n" +
+            "  case-insensitive matching. Row limits use LIMIT n.\n" +
             "\n" +
             "To use these tools, you MUST output a JSON block at the end of your response in this format:\n" +
             "```json\n" +

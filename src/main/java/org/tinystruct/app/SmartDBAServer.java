@@ -19,6 +19,12 @@ import org.tinystruct.mcp.MCPServer;
  *   database.url=jdbc:mysql://localhost:3306/mydb
  *   database.user=root
  *   database.password=secret
+ *
+ *   # or PostgreSQL
+ *   driver=org.postgresql.Driver
+ *   database.url=jdbc:postgresql://localhost:5432/mydb
+ *   database.user=postgres
+ *   database.password=secret
  * </pre>
  * </p>
  *

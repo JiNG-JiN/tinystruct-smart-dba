@@ -19,7 +19,7 @@ SmartDBA is an AI database agent built on the [tinystruct](https://github.com/ti
 
 - **Interactive CLI**: Streams the model's reply live and renders Markdown (headings, lists, code blocks, tables) with ANSI colors.
 - **Database tools over MCP**: List tables, describe schemas, query, insert, update, delete, and run raw SQL (JOINs, subqueries, CTEs).
-- **Any JDBC database**: MySQL/MariaDB, SQLite, H2, SQL Server and other JDBC drivers. Schema discovery uses JDBC metadata, and identifier quoting adapts to the dialect.
+- **Any JDBC database**: MySQL/MariaDB, PostgreSQL, SQLite, H2, SQL Server and other JDBC drivers. Schema discovery uses JDBC metadata, and identifier quoting adapts to the dialect.
 - **Gemini or OpenAI-compatible LLMs**: Defaults to Gemini (`gemini-3.5-flash-lite`).
 - **HTTP + SSE**: The same `chat` action is available over HTTP, with token-by-token updates pushed over Server-Sent Events.
 - **Conversation memory**: History is kept between turns in `.agent_history.json`; an optional skill file adds extra guidance for the model.
@@ -98,7 +98,7 @@ mcp.server.url=http://localhost:8080/
 mcp.auth.token=123456
 ```
 
-**Using your own database:** put its JDBC driver in `pom.xml` (H2 is already there; `sqlite-jdbc`, MySQL and others work the same way), run `./mvnw package -DskipTests` again, and update `driver`, `database.url`, `database.user` and `database.password`. For example, MySQL:
+**Using your own database:** put its JDBC driver in `pom.xml` (H2 and PostgreSQL are already there; `sqlite-jdbc`, MySQL and others work the same way), run `./mvnw package -DskipTests` again, and update `driver`, `database.url`, `database.user` and `database.password`. For example, MySQL:
 
 ```properties
 driver=com.mysql.cj.jdbc.Driver
@@ -106,6 +106,17 @@ database.url=jdbc:mysql://localhost:3306/your_db
 database.user=root
 database.password=secret
 ```
+
+PostgreSQL (the driver is bundled, so no `pom.xml` change is needed):
+
+```properties
+driver=org.postgresql.Driver
+database.url=jdbc:postgresql://localhost:5432/your_db
+database.user=postgres
+database.password=secret
+```
+
+SmartDBA works in the connection's current schema (`public` by default; add `?currentSchema=myschema` to the URL to change it). Table names are matched case-insensitively, and the agent is told PostgreSQL's rules for lower-case folding, reserved words and `SERIAL` keys.
 
 To use an OpenAI-compatible API, set `agent.api_url` (for example `https://api.openai.com/v1/chat/completions`), `agent.model` and `agent.api_key`.
 

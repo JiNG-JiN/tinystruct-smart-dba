@@ -64,6 +64,12 @@
             <artifactId>h2</artifactId>
             <version>2.5.252</version>
         </dependency>
+        <!-- PostgreSQL JDBC driver (set driver=org.postgresql.Driver in application.properties) -->
+        <dependency>
+            <groupId>org.postgresql</groupId>
+            <artifactId>postgresql</artifactId>
+            <version>42.7.4</version>
+        </dependency>
         <!-- JUnit for generated project tests -->
         <dependency>
             <groupId>org.junit.jupiter</groupId>

@@ -25,7 +25,7 @@ import java.util.logging.Logger;
  * tinystruct {@code ActionRegistry} so that the TypeSafe {@code DispatchPipeline}
  * (JEV model) can route and confirm calls before execution.</p>
  *
- * <p>Supports MySQL/MariaDB, SQLite, H2, Microsoft SQL Server, and any other
+ * <p>Supports MySQL/MariaDB, PostgreSQL, SQLite, H2, Microsoft SQL Server, and any other
  * JDBC-compliant database. All schema introspection uses JDBC
  * {@link DatabaseMetaData} rather than vendor-specific SQL, and identifier
  * quoting adapts to the dialect reported by the driver.</p>
@@ -36,6 +36,12 @@ import java.util.logging.Logger;
  *   driver=com.mysql.cj.jdbc.Driver
  *   database.url=jdbc:mysql://localhost:3306/mydb
  *   database.user=root
+ *   database.password=secret
+ *
+ *   # PostgreSQL
+ *   driver=org.postgresql.Driver
+ *   database.url=jdbc:postgresql://localhost:5432/mydb
+ *   database.user=postgres
  *   database.password=secret
  *
  *   # SQLite
@@ -76,6 +82,7 @@ public class DatabaseTool extends MCPTool {
         try {
             String name = meta.getDatabaseProductName().toUpperCase(Locale.ROOT);
             if (name.contains("MYSQL") || name.contains("MARIADB")) return Type.MySQL;
+            if (name.contains("POSTGRESQL"))                          return Type.PostgreSQL;
             if (name.contains("SQLITE"))                              return Type.SQLite;
             if (name.contains("H2"))                                  return Type.H2;
             if (name.contains("MICROSOFT") || name.contains("SQL SERVER")) return Type.SQLServer;
@@ -100,6 +107,41 @@ public class DatabaseTool extends MCPTool {
     /** Wraps an already-sanitized identifier in the correct quote characters. */
     private static String quoteIdentifier(String safe, String q) {
         return q + safe + q;
+    }
+
+    /**
+     * JDBC table types to list for a dialect. PostgreSQL reports partitioned
+     * tables, materialized views and foreign tables as separate types.
+     */
+    private static String[] tableTypes(Type dialect) {
+        if (dialect == Type.PostgreSQL) {
+            return new String[]{"TABLE", "PARTITIONED TABLE", "VIEW", "MATERIALIZED VIEW", "FOREIGN TABLE"};
+        }
+        return new String[]{"TABLE", "VIEW", "SYSTEM TABLE"};
+    }
+
+    /**
+     * Resolves the actual table name as stored in the database.
+     *
+     * <p>Identifiers are always emitted quoted, which makes them case-sensitive.
+     * PostgreSQL folds unquoted names to lower case, so a caller asking for
+     * {@code Users} must reach the table that was created as {@code users}.
+     * An exact match wins; otherwise a case-insensitive match is used. Other
+     * dialects (and unknown tables) return the name unchanged.</p>
+     */
+    private static String resolveTableName(DatabaseOperator operator, DatabaseMetaData meta,
+                                           Type dialect, String name)
+            throws ApplicationException, SQLException {
+        if (dialect != Type.PostgreSQL) return name;
+        String match = null;
+        try (ResultSet rs = meta.getTables(operator.getCatalog(), operator.getSchema(), "%", null)) {
+            while (rs.next()) {
+                String actual = rs.getString("TABLE_NAME");
+                if (name.equals(actual)) return actual;
+                if (match == null && name.equalsIgnoreCase(actual)) match = actual;
+            }
+        }
+        return match != null ? match : name;
     }
 
     // ─────────────────────────────────────────────────────────────────────────
@@ -139,8 +181,7 @@ public class DatabaseTool extends MCPTool {
             String schema  = dialect == Type.SQLite ? null : operator.getSchema();
 
             Builders tables = new Builders();
-            try (ResultSet rs = meta.getTables(catalog, schema, "%",
-                    new String[]{"TABLE", "VIEW", "SYSTEM TABLE"})) {
+            try (ResultSet rs = meta.getTables(catalog, schema, "%", tableTypes(dialect))) {
                 while (rs.next()) {
                     // Skip internal H2 / MSSQL system tables reported via the wildcard.
                     String tableType = rs.getString("TABLE_TYPE");
@@ -198,6 +239,7 @@ public class DatabaseTool extends MCPTool {
             operator.disableSafeCheck();
             DatabaseMetaData meta = operator.getMetaData();
             Type dialect = detectDialect(meta);
+            safeTable = resolveTableName(operator, meta, dialect, safeTable);
 
             String catalog = operator.getCatalog();
             String schema  = dialect == Type.SQLite ? null : operator.getSchema();
@@ -295,6 +337,7 @@ public class DatabaseTool extends MCPTool {
             operator.disableSafeCheck();
             DatabaseMetaData meta = operator.getMetaData();
             Type dialect = detectDialect(meta);
+            safeTable = resolveTableName(operator, meta, dialect, safeTable);
             String q = quoteChar(meta, dialect);
             String quotedTable = quoteIdentifier(safeTable, q);
 
@@ -355,7 +398,9 @@ public class DatabaseTool extends MCPTool {
         try (DatabaseOperator operator = new DatabaseOperator()) {
             operator.disableSafeCheck();
             DatabaseMetaData meta = operator.getMetaData();
-            String q = quoteChar(meta, detectDialect(meta));
+            Type dialect = detectDialect(meta);
+            safeTable = resolveTableName(operator, meta, dialect, safeTable);
+            String q = quoteChar(meta, dialect);
 
             java.util.List<String> cols = new java.util.ArrayList<>(data.keySet());
             StringBuilder sql = new StringBuilder("INSERT INTO ")
@@ -376,7 +421,7 @@ public class DatabaseTool extends MCPTool {
             result.put("table", safeTable);
             result.put("rows_affected", affected);
             result.put("sql", sql.toString());
-        } catch (ApplicationException e) {
+        } catch (ApplicationException | SQLException e) {
             logger.log(Level.SEVERE, "insert failed on: " + safeTable, e);
             throw new MCPException("insert failed on '" + safeTable + "': " + e.getMessage(), e);
         }
@@ -428,7 +473,9 @@ public class DatabaseTool extends MCPTool {
         try (DatabaseOperator operator = new DatabaseOperator()) {
             operator.disableSafeCheck();
             DatabaseMetaData meta = operator.getMetaData();
-            String q = quoteChar(meta, detectDialect(meta));
+            Type dialect = detectDialect(meta);
+            safeTable = resolveTableName(operator, meta, dialect, safeTable);
+            String q = quoteChar(meta, dialect);
 
             java.util.List<String> cols = new java.util.ArrayList<>(dataObj.keySet());
             StringBuilder sql = new StringBuilder("UPDATE ")
@@ -447,7 +494,7 @@ public class DatabaseTool extends MCPTool {
             result.put("table", safeTable);
             result.put("rows_affected", affected);
             result.put("sql", sql.toString());
-        } catch (ApplicationException e) {
+        } catch (ApplicationException | SQLException e) {
             logger.log(Level.SEVERE, "update failed on: " + safeTable, e);
             throw new MCPException("update failed on '" + safeTable + "': " + e.getMessage(), e);
         }
@@ -489,7 +536,9 @@ public class DatabaseTool extends MCPTool {
         try (DatabaseOperator operator = new DatabaseOperator()) {
             operator.disableSafeCheck();
             DatabaseMetaData meta = operator.getMetaData();
-            String q = quoteChar(meta, detectDialect(meta));
+            Type dialect = detectDialect(meta);
+            safeTable = resolveTableName(operator, meta, dialect, safeTable);
+            String q = quoteChar(meta, dialect);
 
             String sql = "DELETE FROM " + quoteIdentifier(safeTable, q) + " WHERE " + where;
             int affected = operator.update(sql);
@@ -498,7 +547,7 @@ public class DatabaseTool extends MCPTool {
             result.put("table", safeTable);
             result.put("rows_affected", affected);
             result.put("sql", sql);
-        } catch (ApplicationException e) {
+        } catch (ApplicationException | SQLException e) {
             logger.log(Level.SEVERE, "delete failed on: " + safeTable, e);
             throw new MCPException("delete failed on '" + safeTable + "': " + e.getMessage(), e);
         }
@@ -616,7 +665,7 @@ public class DatabaseTool extends MCPTool {
      * Builds a SELECT statement with a dialect-correct row-limiting clause.
      *
      * <ul>
-     *   <li>MySQL, SQLite, H2, generic: {@code LIMIT n}</li>
+     *   <li>MySQL, PostgreSQL, SQLite, H2, generic: {@code LIMIT n}</li>
      *   <li>MSSQL: {@code SELECT TOP n ...}</li>
      * </ul>
      */
