@@ -11,6 +11,10 @@
   <a href="https://github.com/tinystruct/tinystruct-smart-dba/stargazers"><img src="https://img.shields.io/github/stars/tinystruct/tinystruct-smart-dba?style=flat" alt="GitHub stars"></a>
 </p>
 
+<p align="center">
+  <a href="README.md">English</a> | <a href="docs/README_zh.md">简体中文</a>
+</p>
+
 # SmartDBA - AI Database Agent
 
 SmartDBA is an AI database agent built on the [tinystruct](https://github.com/tinystruct/tinystruct) framework (1.7.35). Ask questions in plain English ("show me the ten newest orders"); the agent works out the SQL, runs it through a set of MCP database tools, and shows the results as formatted tables in your terminal.
